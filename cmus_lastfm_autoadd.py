@@ -12,6 +12,16 @@ ONLY_TRACKS_IN_LIBRARY = True
 
 # can be 'queue' or 'playlist'
 ADD_TO = 'queue'
+
+# percentage of similar artists to choose epsilon-greedy from
+# (e.g. almost always choose an artist from the first third of the similar
+# artists, just in 10% of all cases choose one from the other 2/3)
+MOST_SIMILAR = 0.33
+EPSILON = 0.1
+
+# probability to not consider similar artists at all, but to choose
+# completely randomly
+JUMPOUT_EPSILON = 0.0
 # ---------------------------------------------------------------------------
 
 import sys
@@ -144,16 +154,21 @@ def main(argv=None):
         die('could not find artist \"artist_name\" on last.fm')
 
     similar_artists = [a.name for a in artist.similar if a.name in cmus.artists]
-    if not similar_artists:
-        warn('no similar artist found, choosing completely randomly')
+    if random.random() < JUMPOUT_EPSILON or not similar_artists:
+        if not similar_artists:
+            warn('no similar artist found, choosing completely randomly')
         similar_artists = cmus.artists.keys()
         random.shuffle(similar_artists)
     else:
-        most_similar_artists = similar_artists[:10]
-        lesser_similar_artists = similar_artists[10:]
+        n_most_similar = int(len(similar_artists) * MOST_SIMILAR)
+        most_similar_artists = similar_artists[:n_most_similar]
+        lesser_similar_artists = similar_artists[n_most_similar:]
         random.shuffle(most_similar_artists)
         random.shuffle(lesser_similar_artists)
-        similar_artists = most_similar_artists + lesser_similar_artists
+        if random.random() < EPSILON:
+            similar_artists = lesser_similar_artists + most_similar_artists
+        else:
+            similar_artists = most_similar_artists + lesser_similar_artists
 
     next_track = None
     for similar_artist in similar_artists:
@@ -171,7 +186,6 @@ def main(argv=None):
         cmus.addfile(next_track,target=ADD_TO)
     else:
         die('no existing track found to add')
-
 
     return 0
 
