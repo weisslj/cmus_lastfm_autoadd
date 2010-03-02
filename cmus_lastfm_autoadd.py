@@ -10,7 +10,7 @@
 # only consider tracks which are in the library when cmus starts
 ONLY_TRACKS_IN_LIBRARY = True
 
-# can be 'queue' or 'library'
+# can be 'queue' or 'playlist'
 ADD_TO = 'queue'
 # ---------------------------------------------------------------------------
 
