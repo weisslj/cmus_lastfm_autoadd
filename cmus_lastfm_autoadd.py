@@ -164,8 +164,8 @@ def main(argv=None):
                 if os.path.exists(f):
                     next_track = f
                     break
-                if next_track:
-                    break
+            if next_track:
+                break
 
     if next_track:
         cmus.addfile(next_track,target=ADD_TO)
