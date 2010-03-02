@@ -23,7 +23,7 @@ def warn(msg):
     print('%s: %s' % (sys.argv[0],msg))
 
 def list2dict(lst):
-    return dict([(lst[i],lst[i+1]) for i in xrange(0,len(lst),2)])
+    return dict((lst[i],lst[i+1]) for i in xrange(0,len(lst),2))
 
 def detach():
     try:
@@ -55,7 +55,7 @@ class CMus(object):
     def read_lib(self):
         try:
             f = open(self.libpath)
-            self.libfiles = set([line.rstrip('\n') for line in f])
+            self.libfiles = set(line.rstrip('\n') for line in f)
         except IOError, (errno, strerror):
             warn('could not open %s: %s' % (self.libpath, strerror))
     def read_cache(self,restrict_to_lib=False):
@@ -120,7 +120,7 @@ def main(argv=None):
     cmus.read_lib()
     cmus.read_cache(restrict_to_lib=True)
 
-    if len(cmus.artists) == 0:
+    if not cmus.artists:
         die('no artists in library / cache')
 
     api = lastfm.Api('23caa86333d2cb2055fa82129802780a')
@@ -132,7 +132,7 @@ def main(argv=None):
         die('could not find artist \"artist_name\" on last.fm')
 
     similar_artists = [a for a in artist.similar if a.name in cmus.artists]
-    if len(similar_artists) == 0:
+    if not similar_artists:
         warn('no similar artist found, choosing completely randomly')
         next_artist = random.choice(cmus.artists.keys())
     else:
