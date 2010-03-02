@@ -2,5 +2,9 @@ You need python-lastfm [1] and python-decorator [2]. The second package is in De
 the first one isn't. For this reason the module is included as subdirectory here.
 Unfortunately python-lastfm doesn't work with python2.5, so python2.6 is required.
 
+To use the script in cmus, just set status_display_program to the path of the
+cmus_lastfm_autoadd.py file. If you want to use multiple status display programs,
+you have to write a wrapper shell script for both.
+
 [1] http://code.google.com/p/python-lastfm/
 [2] http://pypi.python.org/pypi/decorator
