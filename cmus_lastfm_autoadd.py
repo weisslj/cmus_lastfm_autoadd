@@ -3,6 +3,17 @@
 
 # written by Johannes Weißl, GPLv3
 
+# ---------------------------------------------------------------------------
+# configuration, can't use command line options because of cmus'
+# status_display_program handling
+
+# only consider tracks which are in the library when cmus starts
+ONLY_TRACKS_IN_LIBRARY = True
+
+# can be 'queue' or 'library'
+ADD_TO = 'queue'
+# ---------------------------------------------------------------------------
+
 import sys
 import os
 import os.path
@@ -50,8 +61,9 @@ class CMus(object):
         except subprocess.CalledProcessError:
             return False
         return True
-    def addfile(self, filename, target='playlist'):
-        subprocess.Popen([self.remotecmd, '-P', filename])
+    def addfile(self, filename, target='queue'):
+        opt = '-P' if target == 'playlist' else '-q'
+        subprocess.Popen([self.remotecmd, opt, filename])
     def read_lib(self):
         try:
             f = open(self.libpath)
@@ -118,7 +130,7 @@ def main(argv=None):
     detach()
 
     cmus.read_lib()
-    cmus.read_cache(restrict_to_lib=True)
+    cmus.read_cache(restrict_to_lib=ONLY_TRACKS_IN_LIBRARY)
 
     if not cmus.artists:
         die('no artists in library / cache')
@@ -131,15 +143,35 @@ def main(argv=None):
     except lastfm.error.InvalidParametersError:
         die('could not find artist \"artist_name\" on last.fm')
 
-    similar_artists = [a for a in artist.similar if a.name in cmus.artists]
+    similar_artists = [a.name for a in artist.similar if a.name in cmus.artists]
     if not similar_artists:
         warn('no similar artist found, choosing completely randomly')
-        next_artist = random.choice(cmus.artists.keys())
+        similar_artists = cmus.artists.keys()
+        random.shuffle(similar_artists)
     else:
-        next_artist = random.choice(similar_artists[:10]).name
-    
-    next_track = random.choice(cmus.artists[next_artist].values())
-    cmus.addfile(next_track)
+        most_similar_artists = similar_artists[:10]
+        lesser_similar_artists = similar_artists[10:]
+        random.shuffle(most_similar_artists)
+        random.shuffle(lesser_similar_artists)
+        similar_artists = most_similar_artists + lesser_similar_artists
+
+    next_track = None
+    for similar_artist in similar_artists:
+        if cmus.artists[similar_artist]:
+            files = cmus.artists[similar_artist].values()
+            random.shuffle(files)
+            for f in files:
+                if os.path.exists(f):
+                    next_track = f
+                    break
+                if next_track:
+                    break
+
+    if next_track:
+        cmus.addfile(next_track,target=ADD_TO)
+    else:
+        die('no existing track found to add')
+
 
     return 0
 
