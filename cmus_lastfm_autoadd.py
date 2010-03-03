@@ -3,6 +3,8 @@
 
 # written by Johannes Weißl, GPLv3
 
+from __future__ import print_function
+
 # ---------------------------------------------------------------------------
 # configuration, can't use command line options because of cmus'
 # status_display_program handling
@@ -22,6 +24,9 @@ EPSILON = 0.1
 # probability to not consider similar artists at all, but to choose
 # completely randomly
 JUMPOUT_EPSILON = 0.0
+
+# enable debug output
+DEBUG = False
 # ---------------------------------------------------------------------------
 
 import sys
@@ -37,11 +42,16 @@ if 'Api' not in dir(lastfm):
     exit('You need python-lastfm from http://code.google.com/p/python-lastfm/')
 
 def die(msg):
-    print('%s: %s' % (sys.argv[0],msg))
+    print('%s: %s' % (sys.argv[0],msg), file=sys.stderr)
     exit(1)
 
 def warn(msg):
-    print('%s: %s' % (sys.argv[0],msg))
+    print('%s: %s' % (sys.argv[0],msg), file=sys.stderr)
+
+def debug(msg):
+    if DEBUG:
+        print('DEBUG: %s' % (msg,), file=sys.stderr)
+    
 
 def list2dict(lst):
     return dict((lst[i],lst[i+1]) for i in xrange(0,len(lst),2))
@@ -78,7 +88,8 @@ class CMus(object):
         try:
             f = open(self.libpath)
             self.libfiles = set(line.rstrip('\n') for line in f)
-        except IOError, (errno, strerror):
+        except IOError as e:
+            errno, strerror = e
             warn('could not open %s: %s' % (self.libpath, strerror))
     def read_cache(self,restrict_to_lib=False):
         struct_long = struct.Struct('l')
@@ -86,7 +97,8 @@ class CMus(object):
             return (size + struct_long.size - 1) & ~(struct_long.size - 1)
         try:
             f = open(self.cachepath, 'rb')
-        except IOError, (errno, strerror):
+        except IOError as e:
+            errno, strerror = e
             warn('could not open %s: %s' % (self.cachepath, strerror))
             return
         try:
@@ -153,10 +165,15 @@ def main(argv=None):
     except lastfm.error.InvalidParametersError:
         die('could not find artist \"artist_name\" on last.fm')
 
+    debug('searching for similar artists to "%s"' % (artist.name,))
+
     similar_artists = [a.name for a in artist.similar if a.name in cmus.artists]
+    debug('you have %d from %d similar artists' % (len(similar_artists),len(artist.similar)))
     if random.random() < JUMPOUT_EPSILON or not similar_artists:
         if not similar_artists:
             warn('no similar artist found, choosing completely randomly')
+        else:
+            debug('hah! %s%% probability, doing a jump out of similar artists' % (str(100*JUMPOUT_EPSILON),))
         similar_artists = cmus.artists.keys()
         random.shuffle(similar_artists)
     else:
@@ -167,8 +184,10 @@ def main(argv=None):
         random.shuffle(lesser_similar_artists)
         if random.random() < EPSILON:
             similar_artists = lesser_similar_artists + most_similar_artists
+            debug('choosing from the %s%% (= %d) lesser similar artists' % (str(100*(1-MOST_SIMILAR)),len(lesser_similar_artists)))
         else:
             similar_artists = most_similar_artists + lesser_similar_artists
+            debug('choosing from the %s%% (= %d) most similar artists' % (str(100*MOST_SIMILAR),len(most_similar_artists)))
 
     next_track = None
     for similar_artist in similar_artists:
@@ -179,11 +198,14 @@ def main(argv=None):
                 if os.path.exists(f):
                     next_track = f
                     break
+                else:
+                    debug('path "%s" does not exist, continuing...' % (f,))
             if next_track:
                 break
 
     if next_track:
         cmus.addfile(next_track,target=ADD_TO)
+        debug("add file \"%s\" to %s\n" % (next_track,ADD_TO))
     else:
         die('no existing track found to add')
 
