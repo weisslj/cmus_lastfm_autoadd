@@ -65,17 +65,22 @@ def detach():
         pass
 
 class CMus(object):
-    def __init__(self, confdir='~/.cmus'):
-        self.confdir = os.path.expanduser(confdir)
+    def __init__(self, confdir=None):
+        if not confdir:
+            rel_confdir = '.cmus'
+            confdir = os.path.expandvars('${CMUS_HOME}/'+rel_confdir)
+            if not os.path.isabs(confdir):
+                confdir = os.path.expanduser('~/'+rel_confdir)
+        self.confdir = os.path.abspath(confdir)
         self.cachepath = self.confdir + '/cache'
         self.libpath = self.confdir + '/lib.pl'
-        self.remotecmd = 'cmus-remote'
+        self.remotecmd = ['cmus-remote']
         self.libfiles = set()
         self.artists = {}
         self.cache = {}
     def is_running(self):
         try:
-            subprocess.check_call([self.remotecmd, '-C'])
+            subprocess.check_call(self.remotecmd + ['-C'])
         except OSError:
             return False
         except subprocess.CalledProcessError:
@@ -83,7 +88,7 @@ class CMus(object):
         return True
     def addfile(self, filename, target='queue'):
         opt = '-P' if target == 'playlist' else '-q'
-        subprocess.Popen([self.remotecmd, opt, filename])
+        subprocess.Popen(self.remotecmd + [opt, filename])
     def read_lib(self):
         try:
             f = open(self.libpath)
