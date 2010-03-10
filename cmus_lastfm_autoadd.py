@@ -36,10 +36,9 @@ import mmap
 import struct
 import random
 import subprocess
-import lastfm
-
-if 'Api' not in dir(lastfm):
-    exit('You need python-lastfm from http://code.google.com/p/python-lastfm/')
+import urllib
+import urllib2
+import re
 
 def die(msg):
     print('%s: %s' % (sys.argv[0],msg), file=sys.stderr)
@@ -52,9 +51,25 @@ def debug(msg):
     if DEBUG:
         print('DEBUG: %s' % (msg,), file=sys.stderr)
     
-
 def list2dict(lst):
     return dict((lst[i],lst[i+1]) for i in xrange(0,len(lst),2))
+
+def xml_entitiy_decode(text):
+    entitydefs = {
+        'quot': '"',
+        'amp' : '&',
+        'apos': "'",
+        'lt'  : '<',
+        'gt'  : '>'
+    }
+    def fixup(m):
+        return entitydefs[m.group(1)]
+    return re.sub('&('+'|'.join(entitydefs.keys())+');', fixup, text)
+
+def xml_entitiy_encode(text):
+    def fixup(m):
+        return '%'+hex(ord(m.group(0)))[2:]
+    return re.sub('["&\'<>]', fixup, text)
 
 def detach():
     try:
@@ -63,6 +78,19 @@ def detach():
             os._exit(0)
     except:
         pass
+
+class LastFM(object):
+    def __init__(self):
+        self.root_url = 'http://ws.audioscrobbler.com/2.0/'
+    def get_similar(self, artist):
+        q_artist = urllib.quote_plus(xml_entitiy_encode(artist).encode('utf-8'), '')
+        try:
+            f = urllib2.urlopen(self.root_url+'artist/'+q_artist+'/similar.txt')
+            d = f.read()
+        except urllib2.HTTPError as e:
+            raise Exception(str(e))
+        tuples = [tuple(x.split(',',2)) for x in d.rstrip('\n').split('\n')]
+        return [(a,b,xml_entitiy_decode(unicode(c, 'utf-8'))) for (a,b,c) in tuples]
 
 class CMus(object):
     def __init__(self, confdir=None):
@@ -162,18 +190,18 @@ def main(argv=None):
     if not cmus.artists:
         die('no artists in library / cache')
 
-    api = lastfm.Api('23caa86333d2cb2055fa82129802780a')
+    lastfm = LastFM()
     
     artist_name = unicode(cur_track['artist'], 'utf-8')
     try:
-        artist = api.get_artist(artist_name)
-    except lastfm.error.InvalidParametersError:
-        die('could not find artist \"artist_name\" on last.fm')
+        all_similar_artists = lastfm.get_similar(artist_name)
+    except Exception as e:
+        die('cannot fetch similar artists to "'+artist_name+'": '+str(e))
 
-    debug('searching for similar artists to "%s"' % (artist.name,))
+    debug('searching for similar artists to "%s"' % (artist_name,))
 
-    similar_artists = [a.name for a in artist.similar if a.name in cmus.artists]
-    debug('you have %d from %d similar artists' % (len(similar_artists),len(artist.similar)))
+    similar_artists = [a[2] for a in all_similar_artists if a[2] in cmus.artists]
+    debug('you have %d from %d similar artists' % (len(similar_artists),len(all_similar_artists)))
     if random.random() < JUMPOUT_EPSILON or not similar_artists:
         if not similar_artists:
             warn('no similar artist found, choosing completely randomly')
