@@ -145,10 +145,9 @@ class LastFM(object):
 class CMus(object):
     def __init__(self, confdir=None, timeout=30*60):
         if not confdir:
-            rel_confdir = '.cmus'
-            confdir = os.path.expandvars('${CMUS_HOME}/'+rel_confdir)
+            confdir = os.path.expandvars('${CMUS_HOME}')
             if not os.path.isabs(confdir):
-                confdir = os.path.expanduser('~/'+rel_confdir)
+                confdir = os.path.expanduser('~/.cmus')
         self.confdir = os.path.abspath(confdir)
         self.cachepath = self.confdir + '/cache'
         self.libpath = self.confdir + '/lib.pl'
