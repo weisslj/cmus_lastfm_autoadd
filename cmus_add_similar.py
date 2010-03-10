@@ -1,9 +1,7 @@
-#!/usr/bin/env python2.6
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # written by Johannes Weißl, GPLv3
-
-from __future__ import print_function
 
 # ---------------------------------------------------------------------------
 # configuration, can't use command line options because of cmus'
@@ -55,15 +53,15 @@ import time
 import stat
 
 def die(msg):
-    print('%s: %s' % (sys.argv[0],msg), file=sys.stderr)
+    print >> sys.stderr, '%s: %s' % (sys.argv[0],msg)
     exit(1)
 
 def warn(msg):
-    print('%s: %s' % (sys.argv[0],msg), file=sys.stderr)
+    print >> sys.stderr, '%s: %s' % (sys.argv[0],msg)
 
 def debug(msg):
     if DEBUG:
-        print('DEBUG: %s' % (msg,), file=sys.stderr)
+        print >> sys.stderr, 'DEBUG: %s' % (msg,)
     
 def list2dict(lst):
     return dict((lst[i],lst[i+1]) for i in xrange(0,len(lst),2))
@@ -96,13 +94,13 @@ def detach():
 def iter_ext_playlist(filename):
     try:
         f = open(filename, 'r')
-    except IOError as e:
+    except IOError, e:
         errno, strerror = e
         warn('could not open %s: %s' % (self.cachepath, strerror))
         return
     try:
         buf = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-    except mmap.error as e:
+    except mmap.error, e:
         warn('could not mmap %s: %s' % (filename, str(e)))
         return
     try:
@@ -122,7 +120,7 @@ def iter_ext_playlist(filename):
                 info['tags'][key] = val
             else:
                 info[key] = val
-    except Exception as e:
+    except Exception, e:
         warn('extended playlist "%s" is not valid: %s' % (filename,str(e)))
     finally:
         buf.close()
@@ -137,7 +135,7 @@ class AudioScrobbler(object):
         try:
             f = urllib2.urlopen(self.root_url+'artist/'+q_artist+'/similar.txt')
             d = f.read()
-        except urllib2.HTTPError as e:
+        except urllib2.HTTPError, e:
             raise Exception(str(e))
         tuples = [tuple(x.split(',',2)) for x in d.rstrip('\n').split('\n')]
         return [(a,b,xml_entitiy_decode(unicode(c, 'utf-8'))) for (a,b,c) in tuples]
@@ -198,7 +196,7 @@ class CMus(object):
         try:
             f = open(self.libpath)
             self.libfiles = set(line.rstrip('\n') for line in f)
-        except IOError as e:
+        except IOError, e:
             errno, strerror = e
             warn('could not open %s: %s' % (self.libpath, strerror))
     def read_cache(self,restrict_to_lib=False):
@@ -207,13 +205,13 @@ class CMus(object):
             return (size + struct_long.size - 1) & ~(struct_long.size - 1)
         try:
             f = open(self.cachepath, 'rb')
-        except IOError as e:
+        except IOError, e:
             errno, strerror = e
             warn('could not open %s: %s' % (self.cachepath, strerror))
             return
         try:
             buf = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-        except mmap.error as e:
+        except mmap.error, e:
             warn('could not mmap %s: %s' % (filename, str(e)))
             return
         try:
@@ -240,7 +238,7 @@ class CMus(object):
                         if 'title' in keys:
                             self.artists[keys['artist']][keys['title']] = filename
                 offset += align(e_size)
-        except Exception as e:
+        except Exception, e:
             warn('cache is not valid: %s', (str(e),))
         finally:
             buf.close()
@@ -251,8 +249,7 @@ def main(argv=None):
         argv = sys.argv
 
     if len(argv) < 2 or len(argv) % 2 != 1:
-        print('Usage: %s key value [key value]...\n\none key should be \"artist\"')
-        exit(1)
+        die('Usage: %s key value [key value]...\n\none key should be \"artist\"')
     
     cur_track = list2dict(argv[1:])
     if 'artist' not in cur_track:
@@ -280,7 +277,7 @@ def main(argv=None):
     artist_name = unicode(cur_track['artist'], 'utf-8')
     try:
         all_similar_artists = audioscrobbler.get_similar(artist_name)
-    except Exception as e:
+    except Exception, e:
         die('cannot fetch similar artists to "'+artist_name+'": '+str(e))
 
     debug('searching for similar artists to "%s"' % (artist_name,))
