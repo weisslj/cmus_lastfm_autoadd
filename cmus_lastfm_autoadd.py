@@ -123,7 +123,7 @@ def iter_ext_playlist(filename):
             else:
                 info[key] = val
     except Exception as e:
-        warn('extended playlist "%s" is not valid: 5s' % (filename,str(e)))
+        warn('extended playlist "%s" is not valid: %s' % (filename,str(e)))
     finally:
         buf.close()
         f.close()
