@@ -9,8 +9,20 @@ from __future__ import print_function
 # configuration, can't use command line options because of cmus'
 # status_display_program handling
 
+# use new stdout saving feature, e.g.
+# cmus-remote -C "save -l -"
+USE_REMOTE_SAVING = False
+
 # only consider tracks which are in the library when cmus starts
+# (always true for remote saving)
 ONLY_TRACKS_IN_LIBRARY = True
+
+# only use filtered library view
+# (always false for *not* using remote saving)
+FILTERED_LIBRARY = True
+
+# seconds after which remote saving occurs, 0: always
+REMOTE_SAVING_TIMOUT = 30*60
 
 # can be 'queue' or 'playlist'
 ADD_TO = 'queue'
@@ -39,6 +51,8 @@ import subprocess
 import urllib
 import urllib2
 import re
+import time
+import stat
 
 def die(msg):
     print('%s: %s' % (sys.argv[0],msg), file=sys.stderr)
@@ -79,6 +93,42 @@ def detach():
     except:
         pass
 
+def iter_ext_playlist(filename):
+    try:
+        f = open(filename, 'r')
+    except IOError as e:
+        errno, strerror = e
+        warn('could not open %s: %s' % (self.cachepath, strerror))
+        return
+    try:
+        buf = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+    except mmap.error as e:
+        warn('could not mmap %s: %s' % (filename, str(e)))
+        return
+    try:
+        info = {'tags': {}}
+        while True:
+            line = buf.readline()
+            if not line:
+                yield info
+                break
+            key, val = line.rstrip('\n').split(' ',1)
+            if key == 'file':
+                if info.get('file'):
+                    yield info
+                info = {'tags': {}, key: val}
+            elif key == 'tag':
+                key, val = val.split(' ',1)
+                info['tags'][key] = val
+            else:
+                info[key] = val
+    except Exception as e:
+        warn('extended playlist "%s" is not valid: 5s' % (filename,str(e)))
+    finally:
+        buf.close()
+        f.close()
+
+
 class LastFM(object):
     def __init__(self):
         self.root_url = 'http://ws.audioscrobbler.com/2.0/'
@@ -93,7 +143,7 @@ class LastFM(object):
         return [(a,b,xml_entitiy_decode(unicode(c, 'utf-8'))) for (a,b,c) in tuples]
 
 class CMus(object):
-    def __init__(self, confdir=None):
+    def __init__(self, confdir=None, timeout=30*60):
         if not confdir:
             rel_confdir = '.cmus'
             confdir = os.path.expandvars('${CMUS_HOME}/'+rel_confdir)
@@ -102,8 +152,10 @@ class CMus(object):
         self.confdir = os.path.abspath(confdir)
         self.cachepath = self.confdir + '/cache'
         self.libpath = self.confdir + '/lib.pl'
+        self.extpath = self.confdir + '/lib.extpl'
         self.remotecmd = ['cmus-remote']
         self.libfiles = set()
+        self.timeout = timeout
         self.artists = {}
         self.cache = {}
     def is_running(self):
@@ -117,6 +169,32 @@ class CMus(object):
     def addfile(self, filename, target='queue'):
         opt = '-P' if target == 'playlist' else '-q'
         subprocess.Popen(self.remotecmd + [opt, filename])
+    def read_dumped_lib(self, filtered=True):
+        do_dumping = False
+        try:
+            mtime1 = os.stat(self.extpath)[stat.ST_MTIME]
+            mtime2 = os.stat(self.libpath)[stat.ST_MTIME]
+            if mtime2 > mtime1:
+                do_dumping = True
+            elif mtime1 + self.timeout < time.time():
+                do_dumping = True
+        except OSError:
+            do_dumping = True
+        if do_dumping:
+            opt = '-L' if filtered else '-l'
+            f = open(self.extpath, 'w')
+            subprocess.Popen(self.remotecmd + ['-C', 'save -e '+opt+' -'], stdout=f).communicate()
+            f.close()
+        for info in iter_ext_playlist(self.extpath):
+            filename = info.get('file')
+            artist = info['tags'].get('artist')
+            title = info['tags'].get('title')
+            if filename and artist and title:
+                artist = unicode(artist, 'utf-8')
+                title = unicode(title, 'utf-8')
+                if artist not in self.artists:
+                    self.artists[artist] = {}
+                self.artists[artist][title] = filename
     def read_lib(self):
         try:
             f = open(self.libpath)
@@ -136,6 +214,10 @@ class CMus(object):
             return
         try:
             buf = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+        except mmap.error as e:
+            warn('could not mmap %s: %s' % (filename, str(e)))
+            return
+        try:
             buf_size = buf.size()
             if buf_size < 8 or buf[:4] != 'CTC\x02':
                 warn('cache signature is not valid')
@@ -159,8 +241,8 @@ class CMus(object):
                         if 'title' in keys:
                             self.artists[keys['artist']][keys['title']] = filename
                 offset += align(e_size)
-        except:
-            warn('cache is not valid')
+        except Exception as e:
+            warn('cache is not valid: %s', (str(e),))
         finally:
             buf.close()
             f.close()
@@ -177,15 +259,19 @@ def main(argv=None):
     if 'artist' not in cur_track:
         die('no artist given')
     
-    cmus = CMus()
+    cmus = CMus(timeout=REMOTE_SAVING_TIMOUT)
     
     if not cmus.is_running():
         die('cmus not running or cmus-remote not working')
 
-    detach()
+    if not DEBUG:
+        detach()
 
-    cmus.read_lib()
-    cmus.read_cache(restrict_to_lib=ONLY_TRACKS_IN_LIBRARY)
+    if USE_REMOTE_SAVING:
+        cmus.read_dumped_lib(filtered=FILTERED_LIBRARY)
+    else:
+        cmus.read_lib()
+        cmus.read_cache(restrict_to_lib=ONLY_TRACKS_IN_LIBRARY)
 
     if not cmus.artists:
         die('no artists in library / cache')
