@@ -129,7 +129,7 @@ def iter_ext_playlist(filename):
         f.close()
 
 
-class LastFM(object):
+class AudioScrobbler(object):
     def __init__(self):
         self.root_url = 'http://ws.audioscrobbler.com/2.0/'
     def get_similar(self, artist):
@@ -275,11 +275,11 @@ def main(argv=None):
     if not cmus.artists:
         die('no artists in library / cache')
 
-    lastfm = LastFM()
+    audioscrobbler = AudioScrobbler()
     
     artist_name = unicode(cur_track['artist'], 'utf-8')
     try:
-        all_similar_artists = lastfm.get_similar(artist_name)
+        all_similar_artists = audioscrobbler.get_similar(artist_name)
     except Exception as e:
         die('cannot fetch similar artists to "'+artist_name+'": '+str(e))
 
