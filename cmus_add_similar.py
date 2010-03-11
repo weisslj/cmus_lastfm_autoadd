@@ -337,9 +337,9 @@ def main(argv=None):
             similar_artists = most_similar_artists + lesser_similar_artists
             debug('choosing from the %s%% (= %d) most similar artists' % (str(100*MOST_SIMILAR),len(most_similar_artists)))
         # append all other artists
-        for a in cmus.artists.keys():
-            if a not in similar_artists:
-                similar_artists.append(a)
+        additional_artists = [a for a in cmus.artists.keys() if a not in similar_artists]
+        random.shuffle(additional_artists)
+        similar_artists += additional_artists
 
     next_track = None
     for similar_artist in similar_artists:
