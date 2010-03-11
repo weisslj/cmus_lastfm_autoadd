@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# written by Johannes Weißl, GPLv3
+# written by Johannes Weißl <jargon@molb.org>, GPLv3
 
 # ---------------------------------------------------------------------------
 # configuration, can't use command line options because of cmus'
