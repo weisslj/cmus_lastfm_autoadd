@@ -31,6 +31,9 @@ ADD_TO = 'queue'
 MOST_SIMILAR = 0.33
 EPSILON = 0.1
 
+# Remember the last n played tracks, and don't consider them for adding
+REMEMBER_TRACKS = 10
+
 # probability to not consider similar artists at all, but to choose
 # completely randomly
 JUMPOUT_EPSILON = 0.0
@@ -141,7 +144,7 @@ class AudioScrobbler(object):
         return [(a,b,xml_entitiy_decode(unicode(c, 'utf-8'))) for (a,b,c) in tuples]
 
 class CMus(object):
-    def __init__(self, confdir=None, timeout=30*60):
+    def __init__(self, confdir=None, timeout=30*60, remember=0):
         if not confdir:
             confdir = os.path.expandvars('${CMUS_HOME}')
             if not os.path.isabs(confdir):
@@ -150,11 +153,19 @@ class CMus(object):
         self.cachepath = self.confdir + '/cache'
         self.libpath = self.confdir + '/lib.pl'
         self.extpath = self.confdir + '/lib.extpl'
+        self.playedpath = self.confdir + '/added_tracks.pl'
         self.remotecmd = ['cmus-remote']
         self.libfiles = set()
         self.timeout = timeout
         self.artists = {}
         self.cache = {}
+        self.remember = remember
+        self.added_tracks = []
+        if self.remember > 0:
+            self.read_added_tracks()
+    def finalize(self):
+        if self.remember > 0:
+            self.write_added_tracks()
     def is_running(self):
         try:
             subprocess.check_call(self.remotecmd + ['-C'])
@@ -166,6 +177,8 @@ class CMus(object):
     def addfile(self, filename, target='queue'):
         opt = '-P' if target == 'playlist' else '-q'
         subprocess.Popen(self.remotecmd + [opt, filename])
+        if self.remember > 0:
+            self.added_tracks.append(filename)
     def read_dumped_lib(self, filtered=True):
         do_dumping = False
         try:
@@ -179,9 +192,13 @@ class CMus(object):
             do_dumping = True
         if do_dumping:
             opt = '-L' if filtered else '-l'
-            f = open(self.extpath, 'w')
-            subprocess.Popen(self.remotecmd + ['-C', 'save -e '+opt+' -'], stdout=f).communicate()
-            f.close()
+            try:
+                f = open(self.extpath, 'w')
+                subprocess.Popen(self.remotecmd + ['-C', 'save -e '+opt+' -'], stdout=f).communicate()
+                f.close()
+            except IOError, e:
+                errno, strerror = e
+                warn('could not open %s for writing: %s' % (self.extpath, strerror))
         for info in iter_ext_playlist(self.extpath):
             filename = info.get('file')
             artist = info['tags'].get('artist')
@@ -192,10 +209,26 @@ class CMus(object):
                 if artist not in self.artists:
                     self.artists[artist] = {}
                 self.artists[artist][title] = filename
+    def read_added_tracks(self):
+        try:
+            f = open(self.playedpath)
+            self.added_tracks = [line.rstrip('\n') for line in f][-self.remember:]
+            f.close()
+        except:
+            pass
+    def write_added_tracks(self):
+        try:
+            f = open(self.playedpath, 'w')
+            f.write('\n'.join(self.added_tracks[-self.remember:])+'\n')
+            f.close()
+        except IOError, e:
+            errno, strerror = e
+            warn('could not open %s for writing: %s' % (self.playedpath, strerror))
     def read_lib(self):
         try:
             f = open(self.libpath)
             self.libfiles = set(line.rstrip('\n') for line in f)
+            f.close()
         except IOError, e:
             errno, strerror = e
             warn('could not open %s: %s' % (self.libpath, strerror))
@@ -255,7 +288,7 @@ def main(argv=None):
     if 'artist' not in cur_track:
         die('no artist given')
     
-    cmus = CMus(timeout=REMOTE_SAVING_TIMOUT)
+    cmus = CMus(timeout=REMOTE_SAVING_TIMOUT, remember=REMEMBER_TRACKS)
     
     if not cmus.is_running():
         die('cmus not running or cmus-remote not working')
@@ -310,6 +343,9 @@ def main(argv=None):
             files = cmus.artists[similar_artist].values()
             random.shuffle(files)
             for f in files:
+                if f in cmus.added_tracks:
+                    debug('track "%s" is among the last %d added tracks, continuing...' % (f,len(cmus.added_tracks)))
+                    continue
                 if os.path.exists(f):
                     next_track = f
                     break
@@ -323,6 +359,8 @@ def main(argv=None):
         debug("add file \"%s\" to %s\n" % (next_track,ADD_TO))
     else:
         die('no existing track found to add')
+
+    cmus.finalize()
 
     return 0
 
