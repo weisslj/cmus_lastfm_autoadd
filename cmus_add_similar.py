@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 
 # written by Johannes Weißl <jargon@molb.org>, GPLv3
 
@@ -49,25 +48,24 @@ import mmap
 import struct
 import random
 import subprocess
-import urllib
-import urllib2
+import urllib.request, urllib.parse, urllib.error
 import re
 import time
 import stat
 
 def die(msg):
-    print >> sys.stderr, '%s: %s' % (sys.argv[0],msg)
+    print('%s: %s' % (sys.argv[0],msg), file=sys.stderr)
     exit(1)
 
 def warn(msg):
-    print >> sys.stderr, '%s: %s' % (sys.argv[0],msg)
+    print('%s: %s' % (sys.argv[0],msg), file=sys.stderr)
 
 def debug(msg):
     if DEBUG:
-        print >> sys.stderr, 'DEBUG: %s' % (msg,)
+        print('DEBUG: %s' % msg, file=sys.stderr)
     
 def list2dict(lst):
-    return dict((lst[i],lst[i+1]) for i in xrange(0,len(lst),2))
+    return dict((lst[i],lst[i+1]) for i in range(0,len(lst),2))
 
 def xml_entitiy_decode(text):
     entitydefs = {
@@ -96,14 +94,15 @@ def detach():
 
 def iter_ext_playlist(filename):
     try:
-        f = open(filename, 'r')
-    except IOError, e:
+        # playlist is always UTF-8, regardless of OS encoding (test this!)
+        f = open(filename, encoding='utf-8')
+    except IOError as e:
         errno, strerror = e
         warn('could not open %s: %s' % (self.cachepath, strerror))
         return
     try:
         buf = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-    except mmap.error, e:
+    except mmap.error as e:
         warn('could not mmap %s: %s' % (filename, str(e)))
         return
     try:
@@ -123,7 +122,7 @@ def iter_ext_playlist(filename):
                 info['tags'][key] = val
             else:
                 info[key] = val
-    except Exception, e:
+    except Exception as e:
         warn('extended playlist "%s" is not valid: %s' % (filename,str(e)))
     finally:
         buf.close()
@@ -134,14 +133,14 @@ class AudioScrobbler(object):
     def __init__(self):
         self.root_url = 'http://ws.audioscrobbler.com/2.0/'
     def get_similar(self, artist):
-        q_artist = urllib.quote_plus(xml_entitiy_encode(artist).encode('utf-8'), '')
+        q_artist = urllib.parse.quote_plus(xml_entitiy_encode(artist).encode('utf-8'), '')
         try:
-            f = urllib2.urlopen(self.root_url+'artist/'+q_artist+'/similar.txt')
-            d = f.read()
-        except urllib2.HTTPError, e:
+            f = urllib.request.urlopen(self.root_url+'artist/'+q_artist+'/similar.txt')
+            d = f.read().decode('utf-8')
+        except urllib.error.HTTPError as e:
             raise Exception(str(e))
         tuples = [tuple(x.split(',',2)) for x in d.rstrip('\n').split('\n')]
-        return [(a,b,xml_entitiy_decode(unicode(c, 'utf-8'))) for (a,b,c) in tuples]
+        return [(a,b,xml_entitiy_decode(c)) for (a,b,c) in tuples]
 
 class CMus(object):
     def __init__(self, confdir=None, timeout=30*60, remember=0):
@@ -193,10 +192,10 @@ class CMus(object):
         if do_dumping:
             opt = '-L' if filtered else '-l'
             try:
-                f = open(self.extpath, 'w')
+                f = open(self.extpath, mode='w')
                 subprocess.Popen(self.remotecmd + ['-C', 'save -e '+opt+' -'], stdout=f).communicate()
                 f.close()
-            except IOError, e:
+            except IOError as e:
                 errno, strerror = e
                 warn('could not open %s for writing: %s' % (self.extpath, strerror))
         for info in iter_ext_playlist(self.extpath):
@@ -204,32 +203,31 @@ class CMus(object):
             artist = info['tags'].get('artist')
             title = info['tags'].get('title')
             if filename and artist and title:
-                artist = unicode(artist, 'utf-8')
-                title = unicode(title, 'utf-8')
                 if artist not in self.artists:
                     self.artists[artist] = {}
                 self.artists[artist][title] = filename
     def read_added_tracks(self):
         try:
-            f = open(self.playedpath)
+            f = open(self.playedpath, 'utf-8')
             self.added_tracks = [line.rstrip('\n') for line in f][-self.remember:]
             f.close()
         except:
             pass
     def write_added_tracks(self):
         try:
-            f = open(self.playedpath, 'w')
+            f = open(self.playedpath, mode='w', encoding='utf-8')
             f.write('\n'.join(self.added_tracks[-self.remember:])+'\n')
             f.close()
-        except IOError, e:
+        except IOError as e:
             errno, strerror = e
             warn('could not open %s for writing: %s' % (self.playedpath, strerror))
     def read_lib(self):
         try:
-            f = open(self.libpath)
+            # library is always UTF-8, regardless of OS encoding (test this!)
+            f = open(self.libpath, encoding='utf-8')
             self.libfiles = set(line.rstrip('\n') for line in f)
             f.close()
-        except IOError, e:
+        except IOError as e:
             errno, strerror = e
             warn('could not open %s: %s' % (self.libpath, strerror))
     def read_cache(self,restrict_to_lib=False):
@@ -237,29 +235,29 @@ class CMus(object):
         def align(size):
             return (size + struct_long.size - 1) & ~(struct_long.size - 1)
         try:
-            f = open(self.cachepath, 'rb')
-        except IOError, e:
+            f = open(self.cachepath, mode='rb')
+        except IOError as e:
             errno, strerror = e
             warn('could not open %s: %s' % (self.cachepath, strerror))
             return
         try:
             buf = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-        except mmap.error, e:
+        except mmap.error as e:
             warn('could not mmap %s: %s' % (filename, str(e)))
             return
         try:
             buf_size = buf.size()
-            if buf_size < 8 or buf[:4] != 'CTC\x02':
+            if buf_size < 8 or buf[:4] != b'CTC\x02':
                 warn('cache signature is not valid')
                 return
             offset = 8
             s = struct.Struct('Iil')
             while offset < buf_size:
                 e_size, duration, mtime = s.unpack_from(buf, offset)
-                strings = buf[offset+s.size:offset+e_size].split('\x00')[:-1]
-                filename = strings[0]
+                strings = buf[offset+s.size:offset+e_size].split(b'\x00')[:-1]
+                filename = strings[0].decode('utf-8')
                 if not restrict_to_lib or filename in self.libfiles:
-                    keys = list2dict([unicode(x, 'utf-8') for x in strings[1:]])
+                    keys = list2dict([x.decode('utf-8') for x in strings[1:]])
                     #self.cache[filename] = {
                     #        'duration': duration,
                     #        'mtime': mtime,
@@ -271,7 +269,7 @@ class CMus(object):
                         if 'title' in keys:
                             self.artists[keys['artist']][keys['title']] = filename
                 offset += align(e_size)
-        except Exception, e:
+        except Exception as e:
             warn('cache is not valid: %s', (str(e),))
         finally:
             buf.close()
@@ -307,10 +305,10 @@ def main(argv=None):
 
     audioscrobbler = AudioScrobbler()
     
-    artist_name = unicode(cur_track['artist'], 'utf-8')
+    artist_name = cur_track['artist']
     try:
         all_similar_artists = audioscrobbler.get_similar(artist_name)
-    except Exception, e:
+    except Exception as e:
         die('cannot fetch similar artists to "'+artist_name+'": '+str(e))
 
     debug('searching for similar artists to "%s"' % (artist_name,))
@@ -322,7 +320,7 @@ def main(argv=None):
             warn('no similar artist found, choosing completely randomly')
         else:
             debug('hah! %s%% probability, doing a jump out of similar artists' % (str(100*JUMPOUT_EPSILON),))
-        similar_artists = cmus.artists.keys()
+        similar_artists = list(cmus.artists.keys())
         random.shuffle(similar_artists)
     else:
         n_most_similar = int(len(similar_artists) * MOST_SIMILAR)
@@ -344,7 +342,7 @@ def main(argv=None):
     next_track = None
     for similar_artist in similar_artists:
         if cmus.artists[similar_artist]:
-            files = cmus.artists[similar_artist].values()
+            files = list(cmus.artists[similar_artist].values())
             random.shuffle(files)
             for f in files:
                 if f in cmus.added_tracks:
