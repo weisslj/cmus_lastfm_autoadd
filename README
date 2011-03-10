@@ -1,5 +1,22 @@
 To use the script in cmus, just set status_display_program to the path of the
-cmus_add_similar.py file. If you want to use multiple status display
-programs, you have to write a wrapper shell script for both.
+cmus_add_similar.py file, e.g. in cmus:
+
+:set status_display_program=/path/to/cmus_add_similar.py
+
+If you want to use multiple status display programs, you have to write a
+wrapper shell script, e.g.:
+
+cat >/home/XXX/.cmus/status_display_program.sh <<END
+#!/bin/sh
+
+/path/to/cmuscrobbler "$@"
+/path/to/cmus_add_similar.py "$@" &
+END
+
+chmod 755 /home/XXX/.cmus/status_display_program.sh
+
+In cmus:
+:set status_display_program=/home/XXX/.cmus/status_display_program.sh
+
 
 For questions: jargon@molb.org
