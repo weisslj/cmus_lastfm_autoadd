@@ -8,7 +8,11 @@
 
 # use new stdout saving feature, e.g.
 # cmus-remote -C "save -l -"
-USE_REMOTE_SAVING = False
+#
+# Required version of cmus:
+# True: >= 2.3.1
+# False: 2.3.x
+USE_REMOTE_SAVING = True
 
 # only consider tracks which are in the library when cmus starts
 # (always true for remote saving)
