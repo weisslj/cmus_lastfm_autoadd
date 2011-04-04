@@ -43,7 +43,7 @@ REMEMBER_TRACKS = 10
 JUMPOUT_EPSILON = 0.0
 
 # enable debug output
-DEBUG = False
+DEBUG = True
 # ---------------------------------------------------------------------------
 
 import sys
