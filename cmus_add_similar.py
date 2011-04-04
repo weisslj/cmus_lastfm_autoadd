@@ -29,6 +29,11 @@ REMOTE_SAVING_TIMOUT = 30*60
 # can be 'queue' or 'playlist'
 ADD_TO = 'queue'
 
+# if there are more tracks in queue or playlist then MAX_TRACKS, abort
+# (only available if remote saving is True)
+# set to negative number to disable feature
+MAX_TRACKS = -1
+
 # percentage of similar artists to choose epsilon-greedy from
 # (e.g. almost always choose an artist from the first third of the similar
 # artists, just in 10% of all cases choose one from the other 2/3)
@@ -183,6 +188,10 @@ class CMus(object):
         subprocess.Popen(self.remotecmd + [opt, filename])
         if self.remember > 0:
             self.added_tracks.append(filename)
+    def read_editable(self, view):
+        opt = '-p' if view == 'playlist' else '-q'
+        files = subprocess.Popen(self.remotecmd + ['-C', 'save '+opt+' -'], stdout=subprocess.PIPE).communicate()[0].rstrip('\n').split('\n')
+        return files
     def read_dumped_lib(self, filtered=True):
         do_dumping = False
         try:
@@ -301,6 +310,11 @@ def main(argv=None):
         detach()
 
     if USE_REMOTE_SAVING:
+        if MAX_TRACKS >= 0:
+            count = len(cmus.read_editable(ADD_TO))
+            if count > MAX_TRACKS:
+                debug('more than %d tracks (%d) in view %s, aborting' % (MAX_TRACKS, count, ADD_TO))
+                return 0
         cmus.read_dumped_lib(filtered=FILTERED_LIBRARY)
     else:
         cmus.read_lib()
