@@ -10,17 +10,12 @@
 # use new stdout saving feature, e.g.
 # cmus-remote -C "save -l -"
 #
-# Required version of cmus:
-# True: 2.4.x
-# False: 2.3.x
-USE_REMOTE_SAVING = True
+# Required version of cmus: 2.4.x
 
 # only consider tracks which are in the library when cmus starts
-# (always true for remote saving)
 ONLY_TRACKS_IN_LIBRARY = True
 
 # only use filtered library view
-# (always false for *not* using remote saving)
 FILTERED_LIBRARY = True
 
 # seconds after which remote saving occurs, 0: always
@@ -30,7 +25,6 @@ REMOTE_SAVING_TIMOUT = 30*60
 ADD_TO = 'queue'
 
 # if there are more tracks in queue or playlist then MAX_TRACKS, abort
-# (only available if remote saving is True)
 # set to negative number to disable feature
 MAX_TRACKS = -1
 
@@ -237,58 +231,6 @@ class CMus(object):
         except IOError, e:
             errno, strerror = e
             warn('could not open %s for writing: %s' % (self.playedpath, strerror))
-    def read_lib(self):
-        try:
-            f = open(self.libpath)
-            self.libfiles = set(line.rstrip('\n') for line in f)
-            f.close()
-        except IOError, e:
-            errno, strerror = e
-            warn('could not open %s: %s' % (self.libpath, strerror))
-    def read_cache(self,restrict_to_lib=False):
-        struct_long = struct.Struct('l')
-        def align(size):
-            return (size + struct_long.size - 1) & ~(struct_long.size - 1)
-        try:
-            f = open(self.cachepath, 'rb')
-        except IOError, e:
-            errno, strerror = e
-            warn('could not open %s: %s' % (self.cachepath, strerror))
-            return
-        try:
-            buf = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-        except mmap.error, e:
-            warn('could not mmap %s: %s' % (filename, str(e)))
-            return
-        try:
-            buf_size = buf.size()
-            if buf_size < 8 or buf[:4] != 'CTC\x02':
-                warn('cache signature is not valid')
-                return
-            offset = 8
-            s = struct.Struct('Iil')
-            while offset < buf_size:
-                e_size, duration, mtime = s.unpack_from(buf, offset)
-                strings = buf[offset+s.size:offset+e_size].split('\x00')[:-1]
-                filename = strings[0]
-                if not restrict_to_lib or filename in self.libfiles:
-                    keys = list2dict([unicode(x, 'utf-8') for x in strings[1:]])
-                    #self.cache[filename] = {
-                    #        'duration': duration,
-                    #        'mtime': mtime,
-                    #        'keys': keys
-                    #}
-                    if 'artist' in keys:
-                        if keys['artist'] not in self.artists:
-                            self.artists[keys['artist']] = {}
-                        if 'title' in keys:
-                            self.artists[keys['artist']][keys['title']] = filename
-                offset += align(e_size)
-        except Exception, e:
-            warn('cache is not valid: %s', (str(e),))
-        finally:
-            buf.close()
-            f.close()
 
 def main(argv=None):
     if not argv:
@@ -309,16 +251,12 @@ def main(argv=None):
     if not DEBUG:
         detach()
 
-    if USE_REMOTE_SAVING:
-        if MAX_TRACKS >= 0:
-            count = len(cmus.read_editable(ADD_TO))
-            if count > MAX_TRACKS:
-                debug('more than %d tracks (%d) in view %s, aborting' % (MAX_TRACKS, count, ADD_TO))
-                return 0
-        cmus.read_dumped_lib(filtered=FILTERED_LIBRARY)
-    else:
-        cmus.read_lib()
-        cmus.read_cache(restrict_to_lib=ONLY_TRACKS_IN_LIBRARY)
+    if MAX_TRACKS >= 0:
+        count = len(cmus.read_editable(ADD_TO))
+        if count > MAX_TRACKS:
+            debug('more than %d tracks (%d) in view %s, aborting' % (MAX_TRACKS, count, ADD_TO))
+            return 0
+    cmus.read_dumped_lib(filtered=FILTERED_LIBRARY)
 
     if not cmus.artists:
         die('no artists in library / cache')

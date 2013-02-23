@@ -19,4 +19,7 @@ In cmus:
 :set status_display_program=/home/XXX/.cmus/status_display_program.sh
 
 
+Attention: You need at least cmus 2.4.x, 2.3.x or older is not
+           supported anymore.
+
 For questions: jargon@molb.org
