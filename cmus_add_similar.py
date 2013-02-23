@@ -13,7 +13,7 @@
 # Required version of cmus:
 # True: 2.4.x
 # False: 2.3.x
-USE_REMOTE_SAVING = False
+USE_REMOTE_SAVING = True
 
 # only consider tracks which are in the library when cmus starts
 # (always true for remote saving)
